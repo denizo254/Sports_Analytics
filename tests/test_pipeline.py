@@ -162,3 +162,51 @@ def test_defend_objective_lowers_loss_risk():
     defend = next(o for o in rec["options"] if o["mentality"] == "defend")
     attack = next(o for o in rec["options"] if o["mentality"] == "attack")
     assert defend["away_win"] <= attack["away_win"]
+
+
+# --- FBref ingest transform (offline; no soccerdata / network needed) -----
+# Kept LAST: ingest() wipes the DB, so we restore synthetic data afterwards.
+def test_fbref_ingest_transform():
+    import pandas as pd
+    from apexsports.data import fbref
+    from apexsports.data.database import get_session
+    from apexsports.data.schema import Match, PlayerMatchStat, Player, Shot
+
+    schedule = pd.DataFrame([
+        {"game": "g1", "date": "2024-09-17", "home_team": "Real Madrid",
+         "away_team": "Stuttgart", "home_score": 3, "away_score": 1},
+        {"game": "g2", "date": "2024-09-18", "home_team": "Bayern Munich",
+         "away_team": "Dinamo Zagreb", "home_score": 9, "away_score": 2},
+    ])
+    stats = pd.DataFrame([
+        {"game": "g1", "team": "Real Madrid", "player": "Kylian Mbappe",
+         "pos": "FW", "min": 90, "Performance_Gls": 1, "Performance_Sh": 5,
+         "Expected_xG": 0.9, "Performance_Ast": 0, "Passes_Att": 30},
+        {"game": "g1", "team": "Stuttgart", "player": "Deniz Undav",
+         "pos": "FW", "min": 80, "Performance_Gls": 1, "Performance_Sh": 3,
+         "Expected_xG": 0.6, "Performance_Ast": 0, "Passes_Att": 18},
+        {"game": "g2", "team": "Bayern Munich", "player": "Harry Kane",
+         "pos": "FW", "min": 90, "Performance_Gls": 4, "Performance_Sh": 6,
+         "Expected_xG": 2.3, "Performance_Ast": 1, "Passes_Att": 25},
+        {"game": "g2", "team": "Bayern Munich", "player": "Unused Sub",
+         "pos": "MF", "min": 0, "Performance_Gls": 0, "Performance_Sh": 0,
+         "Expected_xG": 0.0, "Performance_Ast": 0, "Passes_Att": 0},
+    ])
+    try:
+        counts = fbref.ingest(schedule, stats, competition="INT-Champions League",
+                              verbose=False)
+        assert counts["matches"] == 2
+        assert counts["shots"] == 0           # FBref path has no per-shot data
+        assert counts["player_match_stats"] == 3  # the 0-minute sub is dropped
+
+        with get_session() as s:
+            assert s.query(Match).count() == 2
+            assert s.query(Shot).count() == 0
+            kane = s.query(Player).filter(Player.name == "Harry Kane").one()
+            st = s.query(PlayerMatchStat).filter(
+                PlayerMatchStat.player_id == kane.id).one()
+            assert st.goals == 4 and st.shots == 6
+            assert abs(st.xg - 2.3) < 1e-6
+    finally:
+        # Restore the shared synthetic dataset for any later runs.
+        generate.generate(n_group_rounds=5, seed=7)

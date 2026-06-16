@@ -170,6 +170,27 @@ Not in open data (set to 0, documented): `travel_km`, `elevation_m`,
 StatsBomb open data is free for non-commercial use — see
 <https://github.com/statsbomb/open-data> for competition IDs and the licence.
 
+### Recent competitions via FBref (e.g. UEFA Champions League)
+
+StatsBomb's *free* data only covers the UCL through 2018/19. For recent seasons
+use the FBref loader (`apexsports/data/fbref.py`, via the `soccerdata` package),
+which pulls **per-player-per-match aggregates** (minutes, goals, shots, xG,
+assists, passes):
+
+```bash
+pip install soccerdata
+# Run on your OWN machine — FBref blocks datacenter/headless IPs (CAPTCHA).
+python scripts/build_all.py --source fbref --season 2024-2025 2025-2026
+```
+
+- Registers the Champions League as a custom soccerdata league automatically.
+- Populates `Match` + `PlayerMatchStat` only — **no per-shot data**, so the xG
+  model and calibration panel are skipped; the Poisson and XGBoost/LSTM
+  forecaster models train normally.
+- FBref is heavily rate-limited and bot-protected; the scrape is slow and works
+  from a normal connection, not cloud sandboxes. The data transform is unit-
+  tested offline (`test_fbref_ingest_transform`).
+
 ---
 
 ## Project layout

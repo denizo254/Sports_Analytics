@@ -23,13 +23,14 @@ from apexsports.models import xg, poisson, forecast
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="ApexSports build pipeline")
-    ap.add_argument("--source", choices=["synthetic", "statsbomb"],
+    ap.add_argument("--source", choices=["synthetic", "statsbomb", "fbref"],
                     default="synthetic")
-    ap.add_argument("--competition", type=int, default=43,
-                    help="StatsBomb competition_id (default 43 = FIFA World Cup)")
-    ap.add_argument("--season", type=int, nargs="+", default=[106],
-                    help="One or more season_ids (default 106 = 2022; "
-                         "e.g. --season 3 106 loads the 2018 + 2022 World Cups)")
+    ap.add_argument("--competition", default=None,
+                    help="statsbomb: competition_id (default 43 = FIFA World "
+                         "Cup). fbref: league name (default Champions League)")
+    ap.add_argument("--season", nargs="+", default=None,
+                    help="statsbomb: season_ids (e.g. 3 106 = 2018+2022 WC). "
+                         "fbref: season strings (e.g. 2024-2025 2025-2026)")
     args = ap.parse_args()
 
     print("=" * 60)
@@ -39,17 +40,27 @@ def main() -> None:
     print(f"\n[1/5] Loading data ({args.source})...")
     if args.source == "statsbomb":
         from apexsports.data.statsbomb import load_competitions
-        specs = [(args.competition, s) for s in args.season]
+        comp = int(args.competition or 43)
+        seasons = args.season or [106]
+        specs = [(comp, int(s)) for s in seasons]
         counts = load_competitions(specs, verbose=False)
+    elif args.source == "fbref":
+        from apexsports.data.fbref import load_fbref, UCL_LEAGUE
+        seasons = args.season or ["2024-2025", "2025-2026"]
+        counts = load_fbref(seasons, competition=args.competition or UCL_LEAGUE,
+                            verbose=False)
     else:
         counts = generate.generate()
     print(json.dumps(counts, indent=2))
 
     print("\n[2/5] Training xG model (logistic regression)...")
-    xg_metrics = xg.train()
-    print(f"  AUC={xg_metrics['auc']:.3f}  logloss={xg_metrics['log_loss']:.3f}  "
-          f"Brier={xg_metrics['brier']:.3f}")
-    print(f"  coefficients: {xg_metrics['coefficients']}")
+    try:
+        xg_metrics = xg.train()
+        print(f"  AUC={xg_metrics['auc']:.3f}  logloss={xg_metrics['log_loss']:.3f}"
+              f"  Brier={xg_metrics['brier']:.3f}")
+        print(f"  coefficients: {xg_metrics['coefficients']}")
+    except RuntimeError as e:
+        print(f"  skipped (no shot-level data for this source): {e}")
 
     print("\n[3/5] Building Poisson player-goal ratings...")
     pois = poisson.build_ratings()
