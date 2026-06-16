@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from apexsports.data.database import get_session
 from apexsports.data.schema import Team, Player, Match
-from apexsports.models import xg, poisson, forecast
+from apexsports.models import xg, poisson, forecast, calibration
 from apexsports.sim.montecarlo import TeamState, simulate, optimize_substitution
 
 app = FastAPI(
@@ -165,6 +165,12 @@ def poisson_player_goals(payload: PoissonIn):
             payload.expected_minutes, ratings=_poisson_ratings())
     except KeyError as e:
         raise HTTPException(404, str(e))
+
+
+@app.get("/calibration")
+def xg_calibration(n_bins: int = 10):
+    """Reliability curves + scores for our xG model vs StatsBomb's."""
+    return calibration.compare(n_bins=n_bins, model=_xg_model())
 
 
 def _to_state(t: TeamIn) -> TeamState:

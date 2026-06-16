@@ -67,7 +67,11 @@ export APEX_DATABASE_URL="postgresql+psycopg://user:pass@host:5432/apex"
 `apexsports/models/xg.py`. Fits `log(p/(1−p)) = β₀ + β₁·distance + β₂·angle +
 β₃·header + β₄·pressure + β₅·big_chance` on shot geometry.
 Validation: on synthetic data the model **recovers the ground-truth
-coefficients** (asserted in `tests/test_pipeline.py`), AUC ≈ 0.85.
+coefficients** (asserted in `tests/test_pipeline.py`), AUC ≈ 0.85. On the real
+2022 World Cup it scores **AUC 0.81 / Brier 0.086** and tracks StatsBomb's own
+xG with **r = 0.91** shot-for-shot — see the **Calibration** tab / `GET
+/calibration` (`apexsports/models/calibration.py`), which plots reliability
+curves for both models against observed goal rates.
 
 ### 2. Player goal distribution — Poisson
 `apexsports/models/poisson.py`. `P(X=k) = λᵏe^(−λ)/k!` where λ is the player's
@@ -123,6 +127,7 @@ like `hold` (protect a 1-0 lead), `win`, or `comeback`.
 | POST   | `/poisson/player-goals`       | Player goal distribution             |
 | POST   | `/simulate`                   | Monte Carlo match outcome            |
 | POST   | `/optimize/substitution`      | Recommend mentality switch           |
+| GET    | `/calibration`                | xG reliability curves: ours vs StatsBomb |
 
 Interactive docs at `/docs` once the server is running.
 
@@ -179,6 +184,7 @@ apexsports/
     poisson.py                Poisson player goals
     forecast.py               XGBoost performance forecasting
     lstm_forecast.py          LSTM sequence forecaster (PyTorch)
+    calibration.py            xG reliability: our model vs StatsBomb
   sim/montecarlo.py           match sim + substitution optimizer
   api/main.py                 FastAPI backend
   dashboard/app.py            Streamlit UI (5 tabs)

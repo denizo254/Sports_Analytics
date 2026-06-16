@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from config import PITCH_LENGTH, PITCH_WIDTH, GOAL_Y
 from apexsports.data.database import get_session
 from apexsports.data.schema import Team, Player, Match, Shot, PlayerMatchStat
-from apexsports.models import xg, poisson, forecast
+from apexsports.models import xg, poisson, forecast, calibration
 from apexsports.sim.montecarlo import TeamState, simulate, optimize_substitution
 
 st.set_page_config(page_title="ApexSports Analytics", page_icon="⚽", layout="wide")
@@ -83,8 +83,9 @@ TEAM_NAME = dict(zip(TEAMS.id, TEAMS.name))
 st.title("⚽ ApexSports Analytics")
 st.caption("Live, tournament-driven predictive insights — 2026 FIFA World Cup")
 
-tab_live, tab_xg, tab_pois, tab_fc, tab_sim = st.tabs(
-    ["📊 Tournament", "🎯 xG Explorer", "🎲 Player Goals", "📈 Forecast", "🔄 In-Game Sim"])
+tab_live, tab_xg, tab_pois, tab_fc, tab_sim, tab_cal = st.tabs(
+    ["📊 Tournament", "🎯 xG Explorer", "🎲 Player Goals", "📈 Forecast",
+     "🔄 In-Game Sim", "📐 Calibration"])
 
 # === Tournament overview =================================================
 with tab_live:
@@ -282,3 +283,61 @@ with tab_sim:
     st.subheader("Most likely final scorelines")
     st.dataframe(pd.DataFrame(base["top_scorelines"]),
                  use_container_width=True, hide_index=True)
+
+# === xG calibration: our model vs StatsBomb ==============================
+with tab_cal:
+    st.subheader("xG calibration — our model vs StatsBomb")
+    st.caption("Reliability diagram: each point is a probability bin; x is the "
+               "mean predicted xG, y the observed goal rate. Points on the "
+               "dashed diagonal are perfectly calibrated.")
+
+    cal = calibration.compare(n_bins=10, model=XG_MODEL)
+    st.write(f"Evaluated on **{cal['n_shots']:,} shots**.")
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode="lines",
+                             line=dict(dash="dash", color="gray"),
+                             name="Perfect calibration"))
+
+    def _add_curve(curve, name, color):
+        d = pd.DataFrame(curve)
+        fig.add_trace(go.Scatter(
+            x=d["mean_predicted"], y=d["observed_freq"], mode="lines+markers",
+            name=name, line=dict(color=color),
+            marker=dict(size=(d["count"].clip(upper=400) / 18 + 6)),
+            hovertext=[f"n={c}" for c in d["count"]]))
+
+    _add_curve(cal["our"]["curve"], "Our xG (logistic)", "#1f77b4")
+    if cal["has_statsbomb"]:
+        _add_curve(cal["statsbomb"]["curve"], "StatsBomb xG", "#e63946")
+    fig.update_layout(height=460, xaxis_title="Mean predicted xG",
+                      yaxis_title="Observed goal frequency",
+                      xaxis=dict(range=[0, 1]), yaxis=dict(range=[0, 1]))
+    st.plotly_chart(fig, use_container_width=True)
+
+    if cal["has_statsbomb"]:
+        sc = pd.DataFrame({
+            "Metric": ["Brier (↓)", "Log loss (↓)", "AUC (↑)", "Mean xG"],
+            "Our model": [cal["our"]["score"]["brier"],
+                          cal["our"]["score"]["log_loss"],
+                          cal["our"]["score"].get("auc", float("nan")),
+                          cal["our"]["score"]["mean_xg"]],
+            "StatsBomb": [cal["statsbomb"]["score"]["brier"],
+                          cal["statsbomb"]["score"]["log_loss"],
+                          cal["statsbomb"]["score"].get("auc", float("nan")),
+                          cal["statsbomb"]["score"]["mean_xg"]],
+        }).round(4)
+        st.dataframe(sc, use_container_width=True, hide_index=True)
+        a1, a2 = st.columns(2)
+        a1.metric("Shot-for-shot correlation (r)",
+                  f"{cal['agreement']['pearson_r']:.3f}")
+        a2.metric("Mean |our − StatsBomb|",
+                  f"{cal['agreement']['mean_abs_diff']:.3f}")
+        st.caption(f"Actual conversion rate: "
+                   f"{cal['our']['score']['actual_rate']:.1%}. Our 5-feature "
+                   "logistic model tracks StatsBomb's full xG closely.")
+    else:
+        st.info("StatsBomb reference xG is only available on real data. "
+                "Load it with `python scripts/build_all.py --source statsbomb`, "
+                "then reopen this tab. (Synthetic data has no reference xG.)")
+

@@ -70,6 +70,9 @@ class Shot(Base):
     under_pressure: Mapped[bool] = mapped_column(Boolean, default=False)
     big_chance: Mapped[bool] = mapped_column(Boolean, default=False)
     is_goal: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Reference xG from the data source (StatsBomb's own model); 0.0 for
+    # synthetic shots. Enables calibrating our xG model against StatsBomb's.
+    sb_xg: Mapped[float] = mapped_column(Float, default=0.0)
 
 
 class PlayerMatchStat(Base):

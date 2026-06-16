@@ -132,7 +132,8 @@ def load_competition(competition_id: int, season_id: int,
                     distance=distance, angle=angle,
                     is_header=str(ev.get("shot_body_part", "")) == "Head",
                     under_pressure=bool(ev.get("under_pressure", False)),
-                    big_chance=sb_xg >= 0.35, is_goal=is_goal))
+                    big_chance=sb_xg >= 0.35, is_goal=is_goal,
+                    sb_xg=round(sb_xg, 4)))
                 n_shots += 1
                 a = agg[pid]
                 a["shots"] += 1

@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from apexsports.data import generate
 from apexsports.data.generate import TRUE_BETA
-from apexsports.models import xg, poisson, forecast
+from apexsports.models import xg, poisson, forecast, calibration
 from apexsports.sim.montecarlo import TeamState, simulate, optimize_substitution
 from apexsports.utils import shot_geometry, city_distance_km
 
@@ -93,6 +93,30 @@ def test_forecast_nonnegative_and_responsive():
     tired = forecast.forecast_player({**base, "fatigue_index": 0.95},
                                      bundle)["predicted_xg"]
     assert fresh >= 0 and tired >= 0
+
+
+# --- Calibration ----------------------------------------------------------
+def test_calibration_reliability_and_compare():
+    # Reliability curve on a perfectly calibrated synthetic signal.
+    import numpy as np
+    rng = np.random.default_rng(0)
+    probs = rng.uniform(0, 1, 5000)
+    outcomes = (rng.uniform(0, 1, 5000) < probs).astype(int)
+    curve = calibration.reliability_curve(probs, outcomes, n_bins=10)
+    assert len(curve) > 0
+    # Predicted and observed should track closely when truly calibrated.
+    assert (curve["mean_predicted"] - curve["observed_freq"]).abs().mean() < 0.05
+
+    sc = calibration.score(probs, outcomes)
+    assert 0 <= sc["brier"] <= 1
+
+    # Full comparison against the trained xG model on the loaded data.
+    out = calibration.compare(n_bins=8)
+    assert out["n_shots"] > 0
+    assert 0 <= out["our"]["score"]["brier"] <= 1
+    assert isinstance(out["has_statsbomb"], bool)
+    # Synthetic data carries no StatsBomb reference xG.
+    assert out["has_statsbomb"] is False
 
 
 # --- LSTM forecaster (skipped when torch is absent, e.g. on CI) -----------
