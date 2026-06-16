@@ -38,6 +38,13 @@ def _poisson_ratings():
     return poisson._load_ratings()
 
 
+@lru_cache(maxsize=1)
+def _lstm_bundle():
+    # Imported lazily so the API runs even if torch isn't installed.
+    from apexsports.models import lstm_forecast
+    return lstm_forecast.load_model()
+
+
 # --- Request schemas ------------------------------------------------------
 class ShotIn(BaseModel):
     x: float = Field(..., ge=0, le=120, description="StatsBomb pitch x (goal at 120)")
@@ -63,6 +70,15 @@ class PoissonIn(BaseModel):
     player_id: int
     opponent_team_id: int
     expected_minutes: int = Field(90, ge=1, le=120)
+
+
+class SequenceForecastIn(BaseModel):
+    match_history: list[dict] = Field(
+        ..., description="Past-match feature dicts, oldest->newest (>= window)")
+    upcoming: dict = Field(
+        default_factory=dict,
+        description="Known pre-match context: minutes, rest_days, travel_km, "
+                    "elevation_m, fatigue_index, skill, position_code")
 
 
 class TeamIn(BaseModel):
@@ -125,6 +141,20 @@ def expected_goals(shot: ShotIn):
 @app.post("/forecast")
 def forecast_output(payload: ForecastIn):
     return forecast.forecast_player(payload.model_dump(), bundle=_forecast_bundle())
+
+
+@app.post("/forecast/sequence")
+def forecast_sequence(payload: SequenceForecastIn):
+    """LSTM forecast from a sequence of recent matches + upcoming context."""
+    try:
+        from apexsports.models import lstm_forecast
+    except ImportError:
+        raise HTTPException(503, "LSTM unavailable — torch not installed.")
+    try:
+        return lstm_forecast.forecast_sequence(
+            payload.match_history, payload.upcoming, bundle=_lstm_bundle())
+    except (ValueError, FileNotFoundError) as e:
+        raise HTTPException(400, str(e))
 
 
 @app.post("/poisson/player-goals")

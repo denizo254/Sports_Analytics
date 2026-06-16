@@ -46,6 +46,16 @@ def load_models():
     return xg.load_model(), forecast.load_model(), poisson._load_ratings()
 
 
+@st.cache_resource(show_spinner=False)
+def load_lstm():
+    """Optional — returns the LSTM bundle, or None if torch/artifact absent."""
+    try:
+        from apexsports.models import lstm_forecast
+        return lstm_forecast, lstm_forecast.load_model()
+    except Exception:
+        return None, None
+
+
 def _draw_pitch(fig: go.Figure):
     """Overlay a half-pitch attacking the right-hand goal (StatsBomb coords)."""
     fig.add_shape(type="rect", x0=60, y0=0, x1=120, y1=80,
@@ -192,7 +202,27 @@ with tab_fc:
              "fatigue_index": fatigue, "form_xg3": 0.25 * skill,
              "form_minutes3": 80.0, "career_xg90": 0.45 * skill}
     out = forecast.forecast_player(feats, bundle=FORECAST_BUNDLE)
-    st.metric("Projected xG (next match)", f"{out['predicted_xg']:.3f}")
+
+    # Optional LSTM sequence forecast for side-by-side comparison.
+    lstm_mod, lstm_bundle = load_lstm()
+    mcol1, mcol2 = st.columns(2)
+    mcol1.metric("XGBoost — projected xG", f"{out['predicted_xg']:.3f}")
+    if lstm_bundle is not None:
+        window = lstm_bundle["config"]["window"]
+        history = [{"minutes": feats["form_minutes3"], "xg": feats["form_xg3"],
+                    "goals": 0, "shots": 2, "passes": 30, "distance_km": 9.5,
+                    "assists": 0, "rest_days": rest, "travel_km": travel,
+                    "elevation_m": elevation, "fatigue_index": fatigue,
+                    "skill": skill, "position_code": pos_code}
+                   for _ in range(window)]
+        upcoming = {"minutes": 90, "rest_days": rest, "travel_km": travel,
+                    "elevation_m": elevation, "fatigue_index": fatigue,
+                    "skill": skill, "position_code": pos_code}
+        lstm_out = lstm_mod.forecast_sequence(history, upcoming, bundle=lstm_bundle)
+        mcol2.metric("LSTM (sequence) — projected xG",
+                     f"{lstm_out['predicted_xg']:.3f}")
+    else:
+        mcol2.info("LSTM unavailable (install torch + run build_all).")
 
     # Sensitivity sweep over fatigue.
     fr = np.linspace(0, 1, 25)

@@ -80,9 +80,27 @@ form + tournament context (fatigue index, rest days, travel km, elevation).
 Top learned features: skill, position, rest days.
 
 > **Honest note on forecasting accuracy:** single-match xG is intrinsically
-> high-variance, so test R² is modest-but-positive (≈0.07). The model captures
-> the *directional* effects of fatigue/rest/travel rather than pinpoint values
-> — which is the realistic ceiling for match-level output prediction.
+> high-variance, so the tabular baseline's test R² is modest-but-positive
+> (≈0.07). It captures the *directional* effects of fatigue/rest/travel rather
+> than pinpoint values — the realistic ceiling for match-level prediction.
+
+### 3b. Performance forecasting — LSTM sequence model (PyTorch)
+`apexsports/models/lstm_forecast.py`. The time-series counterpart to the
+XGBoost baseline. It encodes a player's ordered sequence of recent matches with
+an LSTM, then **fuses the upcoming match's known pre-match context** (expected
+minutes, rest days, travel, elevation, fatigue) before the prediction head:
+
+```
+past matches ──LSTM──► final hidden state ┐
+                                          ├─ concat ─► MLP head ─► xG
+upcoming match known context ─────────────┘
+```
+
+Trained with a fit/validation/test split, **early stopping** (restore best-val
+weights), dropout and weight decay. On the synthetic data it reaches
+**R² ≈ 0.22 / MAE ≈ 0.19**, outperforming the tabular baseline. `torch` is an
+optional dependency: the build step, API route and dashboard panel all degrade
+gracefully when it is absent (and the LSTM test is skipped on CI).
 
 ### 4. Monte Carlo match sim + substitution optimizer
 `apexsports/sim/montecarlo.py`. Simulates remaining minutes as competing
@@ -100,7 +118,8 @@ like `hold` (protect a 1-0 lead), `win`, or `comeback`.
 | GET    | `/teams`                      | List teams + strengths               |
 | GET    | `/teams/{id}/players`         | Squad                                |
 | POST   | `/xg`                         | xG for a shot location               |
-| POST   | `/forecast`                   | Project player xG for next fixture   |
+| POST   | `/forecast`                   | Project player xG (XGBoost)          |
+| POST   | `/forecast/sequence`          | Project player xG (LSTM, sequence)   |
 | POST   | `/poisson/player-goals`       | Player goal distribution             |
 | POST   | `/simulate`                   | Monte Carlo match outcome            |
 | POST   | `/optimize/substitution`      | Recommend mentality switch           |
@@ -137,6 +156,7 @@ apexsports/
     xg.py                     logistic xG
     poisson.py                Poisson player goals
     forecast.py               XGBoost performance forecasting
+    lstm_forecast.py          LSTM sequence forecaster (PyTorch)
   sim/montecarlo.py           match sim + substitution optimizer
   api/main.py                 FastAPI backend
   dashboard/app.py            Streamlit UI (5 tabs)

@@ -24,6 +24,8 @@ DATABASE_URL = os.environ.get("APEX_DATABASE_URL", f"sqlite:///{DB_PATH}")
 XG_MODEL_PATH = ARTIFACTS_DIR / "xg_model.joblib"
 FORECAST_MODEL_PATH = ARTIFACTS_DIR / "forecast_xgb.joblib"
 POISSON_PARAMS_PATH = ARTIFACTS_DIR / "poisson_ratings.json"
+LSTM_MODEL_PATH = ARTIFACTS_DIR / "forecast_lstm.pt"
+LSTM_SCALER_PATH = ARTIFACTS_DIR / "forecast_lstm_scaler.joblib"
 
 # --- Reproducibility ------------------------------------------------------
 RANDOM_SEED = 42

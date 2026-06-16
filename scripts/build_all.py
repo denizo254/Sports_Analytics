@@ -37,10 +37,21 @@ def main() -> None:
     print(f"  rated {len(pois['players'])} players, "
           f"{len(pois['defence'])} team defences")
 
-    print("\n[4/4] Training XGBoost performance forecaster...")
+    print("\n[4/5] Training XGBoost performance forecaster...")
     fc = forecast.train()
     print(f"  rows={fc['n_rows']}  MAE={fc['mae']:.4f}  R2={fc['r2']:.3f}")
     print(f"  top features: {list(fc['feature_importance'].items())[:3]}")
+
+    print("\n[5/5] Training LSTM sequence forecaster (PyTorch)...")
+    try:
+        from apexsports.models import lstm_forecast
+        lf = lstm_forecast.train()
+        print(f"  samples={lf['n_samples']}  window={lf['window']}  "
+              f"MAE={lf['mae']:.4f}  R2={lf['r2']:.3f}  "
+              f"(best epoch {lf['best_epoch']})")
+    except ImportError:
+        print("  torch not installed — skipping LSTM. "
+              "`pip install torch` to enable.")
 
     print("\nDone. Artifacts written to ./artifacts/")
     print("Next: `uvicorn apexsports.api.main:app --reload`  or  "

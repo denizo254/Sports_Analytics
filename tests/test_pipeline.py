@@ -95,6 +95,33 @@ def test_forecast_nonnegative_and_responsive():
     assert fresh >= 0 and tired >= 0
 
 
+# --- LSTM forecaster (skipped when torch is absent, e.g. on CI) -----------
+def test_lstm_forecaster_runs_and_predicts():
+    pytest.importorskip("torch")
+    from apexsports.models import lstm_forecast
+
+    m = lstm_forecast.train(epochs=30, save=True, seed=7)
+    assert m["n_samples"] > 0
+    assert m["window"] == lstm_forecast.WINDOW
+    assert m["mae"] >= 0
+
+    bundle = lstm_forecast.load_model()
+    window = bundle["config"]["window"]
+    history = [{"minutes": 80, "xg": 0.3, "goals": 0, "shots": 2, "passes": 30,
+                "distance_km": 9.5, "assists": 0, "rest_days": 4,
+                "travel_km": 500, "elevation_m": 50, "fatigue_index": 0.3,
+                "skill": 0.75, "position_code": 3} for _ in range(window)]
+    upcoming = {"minutes": 90, "rest_days": 5, "travel_km": 0, "elevation_m": 10,
+                "fatigue_index": 0.2, "skill": 0.75, "position_code": 3}
+    out = lstm_forecast.forecast_sequence(history, upcoming, bundle=bundle)
+    assert out["predicted_xg"] >= 0
+    assert out["matches_used"] == window
+
+    # Too-short history must raise.
+    with pytest.raises(ValueError):
+        lstm_forecast.forecast_sequence(history[:window - 1], upcoming, bundle=bundle)
+
+
 # --- Simulation -----------------------------------------------------------
 def test_simulate_probabilities_normalised():
     h = TeamState("A", 1.6, 1.3, 0.3)
