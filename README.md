@@ -130,12 +130,34 @@ Interactive docs at `/docs` once the server is running.
 
 ## Using real StatsBomb data
 
+The loader populates the **same schema** as the synthetic generator, so all
+models and the dashboard work unchanged on real World Cup data.
+
 ```bash
 pip install statsbombpy
-python -c "from apexsports.data.statsbomb import load_competition; \
-           print(load_competition(competition_id=43, season_id=106))"
-python scripts/build_all.py   # retrain on the real data (skip the generate step if desired)
+
+# Load + train on the 2022 FIFA World Cup (competition 43, season 106)
+python scripts/build_all.py --source statsbomb
+
+# Any open-data competition/season:
+python scripts/build_all.py --source statsbomb --competition 43 --season 3   # 2018 WC
 ```
+
+What it derives from the raw event feed:
+
+| Field            | Source                                              |
+|------------------|-----------------------------------------------------|
+| shots + geometry | shot `location` → distance/angle                    |
+| xG               | StatsBomb's own `shot_statsbomb_xg`                 |
+| goals            | `shot_outcome == Goal`                              |
+| minutes          | Starting XI + Substitution events                   |
+| passes / assists | Pass counts, `pass_goal_assist`                     |
+| rest_days        | per-team fixture schedule                           |
+| player skill     | career xG-per-shot proxy                            |
+
+Not in open data (set to 0, documented): `travel_km`, `elevation_m`,
+`distance_km` — use the synthetic generator to exercise those context features.
+
 StatsBomb open data is free for non-commercial use — see
 <https://github.com/statsbomb/open-data> for competition IDs and the licence.
 
