@@ -27,8 +27,9 @@ def main() -> None:
                     default="synthetic")
     ap.add_argument("--competition", type=int, default=43,
                     help="StatsBomb competition_id (default 43 = FIFA World Cup)")
-    ap.add_argument("--season", type=int, default=106,
-                    help="StatsBomb season_id (default 106 = 2022)")
+    ap.add_argument("--season", type=int, nargs="+", default=[106],
+                    help="One or more season_ids (default 106 = 2022; "
+                         "e.g. --season 3 106 loads the 2018 + 2022 World Cups)")
     args = ap.parse_args()
 
     print("=" * 60)
@@ -37,8 +38,9 @@ def main() -> None:
 
     print(f"\n[1/5] Loading data ({args.source})...")
     if args.source == "statsbomb":
-        from apexsports.data.statsbomb import load_competition
-        counts = load_competition(args.competition, args.season, verbose=False)
+        from apexsports.data.statsbomb import load_competitions
+        specs = [(args.competition, s) for s in args.season]
+        counts = load_competitions(specs, verbose=False)
     else:
         counts = generate.generate()
     print(json.dumps(counts, indent=2))

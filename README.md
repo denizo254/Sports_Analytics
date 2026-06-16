@@ -67,11 +67,13 @@ export APEX_DATABASE_URL="postgresql+psycopg://user:pass@host:5432/apex"
 `apexsports/models/xg.py`. Fits `log(p/(1−p)) = β₀ + β₁·distance + β₂·angle +
 β₃·header + β₄·pressure + β₅·big_chance` on shot geometry.
 Validation: on synthetic data the model **recovers the ground-truth
-coefficients** (asserted in `tests/test_pipeline.py`), AUC ≈ 0.85. On the real
-2022 World Cup it scores **AUC 0.81 / Brier 0.086** and tracks StatsBomb's own
-xG with **r = 0.91** shot-for-shot — see the **Calibration** tab / `GET
-/calibration` (`apexsports/models/calibration.py`), which plots reliability
-curves for both models against observed goal rates.
+coefficients** (asserted in `tests/test_pipeline.py`), AUC ≈ 0.85. On real World
+Cup data (2018 + 2022, 3,200 shots) this geometry-only model scores **AUC 0.80
+/ Brier 0.090** versus StatsBomb's full model at **0.84 / 0.076**, correlating
+**r ≈ 0.68** shot-for-shot — see the **Calibration** tab / `GET /calibration`
+(`apexsports/models/calibration.py`). Our xG features are deliberately kept
+independent of StatsBomb's xG (`big_chance` is geometric, not thresholded on
+`sb_xg`) so the comparison is fair.
 
 ### 2. Player goal distribution — Poisson
 `apexsports/models/poisson.py`. `P(X=k) = λᵏe^(−λ)/k!` where λ is the player's
@@ -144,8 +146,10 @@ pip install statsbombpy
 # Load + train on the 2022 FIFA World Cup (competition 43, season 106)
 python scripts/build_all.py --source statsbomb
 
-# Any open-data competition/season:
-python scripts/build_all.py --source statsbomb --competition 43 --season 3   # 2018 WC
+# Multiple tournaments at once — 2018 + 2022 World Cups. Teams/players are
+# reused across editions, so a player's match sequence spans both (richer
+# history for the LSTM); the rest-day clock resets between tournaments.
+python scripts/build_all.py --source statsbomb --season 3 106
 ```
 
 What it derives from the raw event feed:
