@@ -1,5 +1,7 @@
 # ⚽ ApexSports Analytics
 
+[![CI](https://github.com/denizo254/Sports_Analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/denizo254/Sports_Analytics/actions/workflows/ci.yml)
+
 **Live, tournament-driven predictive insights for elite coaches and teams.**
 
 An end-to-end sports-analytics platform built around the 2026 FIFA World Cup:
