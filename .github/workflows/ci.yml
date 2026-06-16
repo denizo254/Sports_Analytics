@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: pytest (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install test dependencies
+        # Subset of requirements.txt that the test suite exercises. torch,
+        # fastapi, uvicorn and streamlit are excluded here: they are not
+        # imported by the tests, and torch's default Linux wheel is a large
+        # CUDA build that would slow CI down significantly. Add them back when
+        # the LSTM forecaster / API tests need them.
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy pandas scipy scikit-learn xgboost sqlalchemy pytest
+
+      - name: Run tests
+        run: pytest -q
