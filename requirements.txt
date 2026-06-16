@@ -1,0 +1,17 @@
+# ApexSports Analytics — dependencies
+numpy
+pandas
+scipy
+scikit-learn
+xgboost
+torch
+statsmodels
+sqlalchemy
+fastapi
+uvicorn[standard]
+pydantic
+requests
+streamlit
+plotly
+# Optional: real StatsBomb open data
+# statsbombpy
